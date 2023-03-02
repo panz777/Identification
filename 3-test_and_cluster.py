@@ -16,13 +16,40 @@ from lightgbm import LGBMClassifier, log_evaluation
 from joblib import load
 
 def getClassifyData(data):
-    dataX = data[:, 1:]
-    dataY = data[:, 0]
+    dataX = []
+    dataY = []
+    for elem in data:
+        idx_range = elem[1]
+        this_x = cache[idx_range[0]: idx_range[1], :21]
+        i = 5
+        while i < this_x.shape[0] - 5:
+            this_x_calc = this_x[i - 5:i + 5, :21]
+            dataX.append(np.concatenate((this_x_calc.max(axis=0),
+                                         this_x_calc.min(axis=0),
+                                         this_x_calc.mean(axis=0),
+                                         np.median(this_x_calc, axis=0),
+                                         np.std(this_x_calc,
+                                                axis=0),)))
+            dataY.append(elem[0])
+            i += 10
+        print(elem[0])
+    dataX = torch.from_numpy(np.array(dataX))
+    dataY = torch.tensor(dataY)
     return dataX, dataY
 
 print("Importing Data...")
-testData = torch.load('./data/test.pt')
-clusterData = torch.load('./data/cluster.pt')
+replay_meta = pd.read_pickle('data_loader/-1_df.pkl')
+cache_path = 'data_loader/test_cache_all.dat'
+cache_size = os.stat(cache_path).st_size
+cache_length = cache_size // (23 * 4)  # 21 = (4 [rot] + 3 [pos]) * 3 + 3
+cache = np.memmap(cache_path, dtype=np.float32, mode='r', shape=(int(cache_length), 23))
+all_data = top_song_filter(replay_meta, 50)
+testData = []
+clusterData = []
+user_num = len(all_data)
+for id in range(0, user_num):
+    testData.append((id, all_data[id][2]))
+    clusterData.append((id, all_data[id][3]))
 testX, testY = getClassifyData(testData)
 clusterX, clusterY = getClassifyData(clusterData)
 
